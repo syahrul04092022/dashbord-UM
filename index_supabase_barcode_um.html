@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DATA BARCODE UM</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Poppins,sans-serif}
+body{background:#0f0f0f;color:#fff;padding:20px}
+.header,.card,.table-wrap{background:#181818;border:1px solid #d4af37;border-radius:15px}
+.header{padding:25px;text-align:center;margin-bottom:20px}
+.header h1{color:#FFD700}
+.card{padding:20px;margin-bottom:20px}
+input{width:100%;padding:12px;background:#242424;color:#fff;border:none;border-radius:10px}
+label{display:block;margin-bottom:6px}
+.form-group{margin-bottom:15px}
+.btn{background:#FFD700;color:#000;border:none;padding:12px;border-radius:10px;width:100%;cursor:pointer;font-weight:700}
+.stats{margin:15px 0;font-size:20px;color:#FFD700}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px;border-bottom:1px solid #333;text-align:left}
+th{color:#FFD700}
+.action-btn{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;margin-right:5px}
+.view{background:#2196f3;color:#fff}
+.copy{background:#00c853;color:#fff}
+.delete{background:#ff4444;color:#fff}
+</style>
+</head>
+<body>
+
+<div class="header">
+<h1>DASHBOARD DATA BARCODE UM</h1>
+<p>Sistem Penyimpanan & Manajemen Barcode</p>
+</div>
+
+<div class="card">
+<div class="form-group">
+<label>Nama Barcode</label>
+<input id="nama" type="text">
+</div>
+<div class="form-group">
+<label>Upload Gambar Barcode</label>
+<input id="foto" type="file" accept="image/*">
+</div>
+<button class="btn" onclick="simpanData()">SIMPAN DATA</button>
+</div>
+
+<div class="stats">Total Barcode : <span id="totalData">0</span></div>
+
+<div class="card">
+<input type="text" id="search" placeholder="Cari Barcode..." onkeyup="renderData()">
+</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>No</th>
+<th>Nama Barcode</th>
+<th>Preview</th>
+<th>Aksi</th>
+</tr>
+</thead>
+<tbody id="listData"></tbody>
+</table>
+</div>
+
+<script>
+const supabase = window.supabase.createClient(
+'https://xbjfcjnalmlkheejimqg.supabase.co',
+'sb_publishable_ot68wlteQz3ewlJN2j3sPw_4Szb8CE6'
+);
+
+let cacheData=[];
+
+async function simpanData(){
+ const nama=document.getElementById('nama').value.trim();
+ const file=document.getElementById('foto').files[0];
+ if(!nama||!file){alert('Lengkapi data');return;}
+
+ const fileName=Date.now()+"_"+file.name.replace(/\s+/g,'_');
+
+ const up=await supabase.storage.from('barcode').upload(fileName,file);
+ if(up.error){alert('Upload gagal');console.log(up.error);return;}
+
+ const {data:urlData}=supabase.storage.from('barcode').getPublicUrl(fileName);
+
+ const ins=await supabase.from('barcode_um').insert({
+   nama:nama,
+   foto_url:urlData.publicUrl
+ });
+
+ if(ins.error){alert('Simpan database gagal');console.log(ins.error);return;}
+
+ document.getElementById('nama').value='';
+ document.getElementById('foto').value='';
+ alert('Berhasil disimpan');
+ loadData();
+}
+
+async function loadData(){
+ const res=await supabase.from('barcode_um').select('*').order('id',{ascending:false});
+ if(res.error){console.log(res.error);return;}
+ cacheData=res.data||[];
+ renderData();
+}
+
+function copyLink(url){
+ navigator.clipboard.writeText(url);
+ alert('Link berhasil disalin');
+}
+
+async function hapusData(id,url){
+ if(!confirm('Hapus barcode ini?')) return;
+
+ await supabase.from('barcode_um').delete().eq('id',id);
+
+ try{
+   const path=decodeURIComponent(url.split('/storage/v1/object/public/barcode/')[1]||'');
+   if(path){
+      await supabase.storage.from('barcode').remove([path]);
+   }
+ }catch(e){}
+
+ loadData();
+}
+
+function renderData(){
+ const key=(document.getElementById('search').value||'').toLowerCase();
+ const data=cacheData.filter(x=>(x.nama||'').toLowerCase().includes(key));
+
+ document.getElementById('totalData').innerText=data.length;
+
+ let html='';
+ data.forEach((item,i)=>{
+ html+=`<tr>
+ <td>${i+1}</td>
+ <td>${item.nama||''}</td>
+ <td><a href="${item.foto_url}" target="_blank">Lihat</a></td>
+ <td>
+ <button class="action-btn copy" onclick="copyLink('${item.foto_url}')">Copy</button>
+ <button class="action-btn delete" onclick="hapusData(${item.id},'${item.foto_url}')">Hapus</button>
+ </td>
+ </tr>`;
+ });
+ document.getElementById('listData').innerHTML=html;
+}
+
+loadData();
+</script>
+</body>
+</html>
